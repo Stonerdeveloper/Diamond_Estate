@@ -995,7 +995,7 @@ export default function AdminDashboard() {
                                     <span style={{ fontWeight: 600 }}>₦{receiptData.amountPaid.toLocaleString()}</span>
                                 </div>
                                 <div style={{ fontSize: '0.8125rem', color: '#666' }}>
-                                    Coverage: {receiptData.monthsCovered.map(m => formatMonthLabel(m)).join(', ')}
+                                    Coverage: {receiptData.monthsCovered.map((m: string) => formatMonthLabel(m)).join(', ')}
                                 </div>
                                 {receiptData.creditApplied > 0 && (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.8125rem', color: '#10b981' }}>
