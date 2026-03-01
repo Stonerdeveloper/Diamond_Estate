@@ -33,7 +33,7 @@ export default function PayPage() {
         fullName: '',
         email: '',
         phone: '',
-        role: 'tenant' as 'landlord' | 'tenant',
+        structureType: 'Mini Flat',
         levyTypeId: '',
         levyName: '',
         amount: 0,
@@ -48,7 +48,7 @@ export default function PayPage() {
         const loadData = async () => {
             const [{ data: streetsData }, { data: leviesData }] = await Promise.all([
                 supabase.from('streets').select('*').order('name'),
-                supabase.from('levy_types').select(`id, name, levy_rates(resident_role, amount)`),
+                supabase.from('levy_types').select(`id, name, levy_rates(structure_type, amount)`),
             ]);
             if (streetsData) setStreets(streetsData);
             if (leviesData) setLevyTypes(leviesData);
@@ -69,7 +69,7 @@ export default function PayPage() {
     const getAmount = (levyId: string) => {
         const levy = levyTypes.find(l => l.id === levyId);
         if (!levy) return 0;
-        const rate = levy.levy_rates?.find((r: any) => r.resident_role === form.role);
+        const rate = levy.levy_rates?.find((r: any) => r.structure_type === form.structureType);
         return rate ? Number(rate.amount) : 0;
     };
 
@@ -89,18 +89,18 @@ export default function PayPage() {
         setForm(f => ({ ...f, levyTypeId: e.target.value, levyName: levy?.name || '', amount: amt }));
     };
 
-    const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newRole = e.target.value as 'landlord' | 'tenant';
+    const handleStructureTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const newType = e.target.value;
         setForm(f => {
-            const amt = f.levyTypeId ? getAmountForRole(f.levyTypeId, newRole) : 0;
-            return { ...f, role: newRole, amount: amt };
+            const amt = f.levyTypeId ? getAmountForType(f.levyTypeId, newType) : 0;
+            return { ...f, structureType: newType, amount: amt };
         });
     };
 
-    const getAmountForRole = (levyId: string, role: string) => {
+    const getAmountForType = (levyId: string, type: string) => {
         const levy = levyTypes.find(l => l.id === levyId);
         if (!levy) return 0;
-        const rate = levy.levy_rates?.find((r: any) => r.resident_role === role);
+        const rate = levy.levy_rates?.find((r: any) => r.structure_type === type);
         return rate ? Number(rate.amount) : 0;
     };
 
@@ -262,10 +262,11 @@ export default function PayPage() {
                             </div>
 
                             <div>
-                                <label style={labelStyle}>I am a *</label>
-                                <select style={inputStyle} value={form.role} onChange={handleRoleChange}>
-                                    <option value="tenant" style={{ color: 'black' }}>Tenant</option>
-                                    <option value="landlord" style={{ color: 'black' }}>Landlord / Property Owner</option>
+                                <label style={labelStyle}>Structure Type *</label>
+                                <select style={inputStyle} value={form.structureType} onChange={handleStructureTypeChange}>
+                                    {['Duplex', 'Mini Flat', '2 & 3 Bedroom', 'Shop', 'Church', 'Warehouse', 'Hotel Bar', 'School', 'Bungalow'].map(type => (
+                                        <option key={type} value={type} style={{ color: 'black' }}>{type}</option>
+                                    ))}
                                 </select>
                             </div>
 
@@ -306,7 +307,7 @@ export default function PayPage() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             {levyTypes.map(levy => {
-                                const rate = levy.levy_rates?.find((r: any) => r.resident_role === form.role);
+                                const rate = levy.levy_rates?.find((r: any) => r.structure_type === form.structureType);
                                 const amount = rate ? Number(rate.amount) : 0;
                                 const isSelected = form.levyTypeId === levy.id;
                                 return (
@@ -326,7 +327,7 @@ export default function PayPage() {
                                                 <p style={{ fontWeight: 800, fontSize: '1.5rem', color: isSelected ? 'var(--primary)' : 'var(--foreground)' }}>
                                                     ₦{amount.toLocaleString()}
                                                 </p>
-                                                <p style={{ color: 'gray', fontSize: '0.75rem' }}>for {form.role}s</p>
+                                                <p style={{ color: 'gray', fontSize: '0.75rem' }}>{form.structureType}</p>
                                             </div>
                                         </div>
                                     </div>
@@ -365,7 +366,7 @@ export default function PayPage() {
                             {[
                                 { label: 'Name', value: form.fullName },
                                 { label: 'Location', value: `${form.streetName} · Unit ${form.apartmentUnit}` },
-                                { label: 'Role', value: form.role.charAt(0).toUpperCase() + form.role.slice(1) },
+                                { label: 'Structure Type', value: form.structureType },
                                 { label: 'Levy', value: `${form.levyName} Levy` },
                             ].map(row => (
                                 <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>

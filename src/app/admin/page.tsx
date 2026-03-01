@@ -46,7 +46,7 @@ export default function AdminDashboard() {
     const [streets, setStreets] = useState<any[]>([]);
     const [bills, setBills] = useState<Record<string, string>>({}); // residentId → status
     const [collectedThisMonth, setCollectedThisMonth] = useState(0);
-    const [newLevy, setNewLevy] = useState({ name: '', landlordRate: '', tenantRate: '' });
+    const [newLevy, setNewLevy] = useState({ name: '', rates: { 'Duplex': '', 'Mini Flat': '', '2 & 3 Bedroom': '', 'Shop': '', 'Church': '', 'Warehouse': '', 'Hotel Bar': '', 'School': '', 'Bungalow': '' } });
 
     // Search
     const [searchQuery, setSearchQuery] = useState('');
@@ -56,7 +56,7 @@ export default function AdminDashboard() {
     const [editingResident, setEditingResident] = useState<any>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [residentForm, setResidentForm] = useState({
-        full_name: '', email: '', phone: '', role: 'tenant',
+        full_name: '', email: '', phone: '', structure_type: 'Mini Flat',
         street_id: '', apartment_unit: '', levy_type_id: '', monthly_amount: '',
     });
 
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
                 { data: paymentsData },
             ] = await Promise.all([
                 supabase.from('residents').select('*, streets(name)').order('created_at', { ascending: false }),
-                supabase.from('levy_types').select('id, name, levy_rates(resident_role, amount)'),
+                supabase.from('levy_types').select('id, name, levy_rates(structure_type, amount)'),
                 supabase.from('streets').select('*').order('name'),
                 supabase.from('monthly_bills').select('resident_id, status').eq('month_year', currentMonthYear()),
                 supabase.from('payments').select('amount').eq('status', 'success')
@@ -96,7 +96,7 @@ export default function AdminDashboard() {
                 name: r.full_name || 'Unknown',
                 email: r.email,
                 phone: r.phone,
-                role: r.role ? r.role.charAt(0).toUpperCase() + r.role.slice(1) : 'Tenant',
+                structureType: r.structure_type || 'Mini Flat',
                 streetId: r.street_id,
                 streetName: r.streets?.name || '—',
                 apartmentUnit: r.apartment_unit || 'N/A',
@@ -108,9 +108,9 @@ export default function AdminDashboard() {
 
             if (leviesData) {
                 setLevies(leviesData.map(l => {
-                    const landlordRate = l.levy_rates?.find((r: any) => r.resident_role === 'landlord')?.amount || 0;
-                    const tenantRate = l.levy_rates?.find((r: any) => r.resident_role === 'tenant')?.amount || 0;
-                    return { id: l.id, name: l.name, landlordRate: Number(landlordRate), tenantRate: Number(tenantRate), cycle: 'Monthly' };
+                    const rates: Record<string, number> = {};
+                    l.levy_rates?.forEach((r: any) => { rates[r.structure_type] = Number(r.amount) || 0; });
+                    return { id: l.id, name: l.name, rates, cycle: 'Monthly' };
                 }));
             }
 
@@ -145,7 +145,7 @@ export default function AdminDashboard() {
     // ── Resident Modal Handlers ────────────────────────────────────────────────
     const openAddResident = () => {
         setEditingResident(null);
-        setResidentForm({ full_name: '', email: '', phone: '', role: 'tenant', street_id: '', apartment_unit: '', levy_type_id: '', monthly_amount: '' });
+        setResidentForm({ full_name: '', email: '', phone: '', structure_type: 'Mini Flat', street_id: '', apartment_unit: '', levy_type_id: '', monthly_amount: '' });
         setIsResidentModalOpen(true);
     };
 
@@ -153,7 +153,7 @@ export default function AdminDashboard() {
         setEditingResident(r);
         setResidentForm({
             full_name: r.name || '', email: r.email || '', phone: r.phone || '',
-            role: r.role?.toLowerCase() || 'tenant', street_id: r.streetId || '',
+            structure_type: r.structureType || 'Mini Flat', street_id: r.streetId || '',
             apartment_unit: r.apartmentUnit === 'N/A' ? '' : (r.apartmentUnit || ''),
             levy_type_id: r.levyTypeId || '', monthly_amount: String(r.monthlyAmount || ''),
         });
@@ -163,8 +163,8 @@ export default function AdminDashboard() {
     // Auto-fill monthly amount when levy type changes
     const handleLevyTypeChange = (levyTypeId: string) => {
         const levy = levies.find(l => l.id === levyTypeId);
-        const role = residentForm.role;
-        const amount = levy ? (role === 'landlord' ? levy.landlordRate : levy.tenantRate) : '';
+        const structureType = residentForm.structure_type;
+        const amount = levy ? levy.rates[structureType] : '';
         setResidentForm(f => ({ ...f, levy_type_id: levyTypeId, monthly_amount: String(amount) }));
     };
 
@@ -178,7 +178,7 @@ export default function AdminDashboard() {
             const res = await updateResidentAction(editingResident.id, fd);
             if (res.success && res.user) {
                 setResidents(prev => prev.map(r => r.id === editingResident.id
-                    ? { ...r, name: res.user.name, role: res.user.role, apartmentUnit: res.user.apartmentUnit, monthlyAmount: res.user.monthlyAmount }
+                    ? { ...r, name: res.user.name, structureType: res.user.structureType, apartmentUnit: res.user.apartmentUnit, monthlyAmount: res.user.monthlyAmount }
                     : r
                 ));
                 setIsResidentModalOpen(false);
@@ -217,16 +217,20 @@ export default function AdminDashboard() {
 
     // ── Levy Management ────────────────────────────────────────────────────────
     const handleAddLevy = async () => {
-        if (!newLevy.name || !newLevy.landlordRate || !newLevy.tenantRate) return;
+        if (!newLevy.name) return;
         const { data: levyTypeData, error } = await supabase.from('levy_types')
             .insert({ name: newLevy.name, description: 'Created from Admin Dashboard' }).select().single();
         if (error || !levyTypeData) { console.error(error); return; }
-        await supabase.from('levy_rates').insert([
-            { levy_type_id: levyTypeData.id, resident_role: 'landlord', amount: Number(newLevy.landlordRate) },
-            { levy_type_id: levyTypeData.id, resident_role: 'tenant', amount: Number(newLevy.tenantRate) },
-        ]);
-        setLevies(prev => [...prev, { id: levyTypeData.id, name: newLevy.name, landlordRate: Number(newLevy.landlordRate), tenantRate: Number(newLevy.tenantRate), cycle: 'Monthly' }]);
-        setNewLevy({ name: '', landlordRate: '', tenantRate: '' });
+
+        const rateInserts = Object.entries(newLevy.rates).map(([type, amount]) => ({
+            levy_type_id: levyTypeData.id,
+            structure_type: type,
+            amount: Number(amount) || 0
+        }));
+        await supabase.from('levy_rates').insert(rateInserts);
+
+        setLevies(prev => [...prev, { id: levyTypeData.id, name: newLevy.name, rates: newLevy.rates, cycle: 'Monthly' }]);
+        setNewLevy({ name: '', rates: { 'Duplex': '', 'Mini Flat': '', '2 & 3 Bedroom': '', 'Shop': '', 'Church': '', 'Warehouse': '', 'Hotel Bar': '', 'School': '', 'Bungalow': '' } });
     };
 
     // ── Pay Now handler ────────────────────────────────────────────────────────
@@ -376,7 +380,7 @@ export default function AdminDashboard() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                                            {['Name', 'Role', 'Street', 'Unit', 'Monthly Levy'].map(h => (
+                                            {['Name', 'Structure', 'Street', 'Unit', 'Monthly Levy'].map(h => (
                                                 <th key={h} style={{ padding: '12px', color: 'gray', fontWeight: 500 }}>{h}</th>
                                             ))}
                                         </tr>
@@ -386,8 +390,8 @@ export default function AdminDashboard() {
                                             <tr key={r.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                                                 <td style={{ padding: '16px 12px', fontWeight: 500 }}>{r.name}</td>
                                                 <td style={{ padding: '16px 12px' }}>
-                                                    <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', background: r.role === 'Landlord' ? 'rgba(59,130,246,0.1)' : 'rgba(16,185,129,0.1)', color: r.role === 'Landlord' ? 'var(--primary)' : 'var(--success)' }}>
-                                                        {r.role}
+                                                    <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', background: 'rgba(59,130,246,0.1)', color: 'var(--primary)' }}>
+                                                        {r.structureType}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '16px 12px', color: 'gray' }}>{r.streetName}</td>
@@ -428,7 +432,7 @@ export default function AdminDashboard() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.02)' }}>
-                                            {['Name', 'Role', 'Street & Unit', 'Monthly Levy', 'Credit', 'This Month', 'Actions'].map(h => (
+                                            {['Name', 'Structure', 'Street & Unit', 'Monthly Levy', 'Credit', 'This Month', 'Actions'].map(h => (
                                                 <th key={h} style={{ padding: '14px 16px', color: 'gray', fontWeight: 500, fontSize: '0.8125rem' }}>{h}</th>
                                             ))}
                                         </tr>
@@ -450,8 +454,8 @@ export default function AdminDashboard() {
                                                     {r.email && <div style={{ fontSize: '0.75rem', color: 'gray' }}>{r.email}</div>}
                                                 </td>
                                                 <td style={{ padding: '16px' }}>
-                                                    <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, background: r.role === 'Landlord' ? 'rgba(59,130,246,0.12)' : 'rgba(16,185,129,0.12)', color: r.role === 'Landlord' ? 'var(--primary)' : 'var(--success)' }}>
-                                                        {r.role}
+                                                    <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, background: 'rgba(59,130,246,0.12)', color: 'var(--primary)' }}>
+                                                        {r.structureType}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: '16px', fontSize: '0.875rem', color: 'gray' }}>
@@ -496,7 +500,7 @@ export default function AdminDashboard() {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid var(--glass-border)' }}>
-                                            {['Levy Name', 'Landlord Rate', 'Tenant Rate', 'Billing Cycle', 'Action'].map(h => (
+                                            {['Levy Name', 'Rates', 'Billing Cycle', 'Action'].map(h => (
                                                 <th key={h} style={{ padding: '12px', color: 'gray', fontWeight: 500 }}>{h}</th>
                                             ))}
                                         </tr>
@@ -505,8 +509,15 @@ export default function AdminDashboard() {
                                         {levies.map(levy => (
                                             <tr key={levy.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                                                 <td style={{ padding: '16px 12px', fontWeight: 500 }}>{levy.name}</td>
-                                                <td style={{ padding: '16px 12px' }}>₦{levy.landlordRate.toLocaleString()}</td>
-                                                <td style={{ padding: '16px 12px' }}>₦{levy.tenantRate.toLocaleString()}</td>
+                                                <td style={{ padding: '16px 12px', fontSize: '0.8125rem' }}>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                        {Object.entries(levy.rates || {}).filter(([_, amt]) => Number(amt) > 0).map(([type, amt]) => (
+                                                            <span key={type} style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', whiteSpace: 'nowrap' }}>
+                                                                <span style={{ color: 'gray' }}>{type}:</span> ₦{Number(amt).toLocaleString()}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
                                                 <td style={{ padding: '16px 12px', color: 'gray' }}>{levy.cycle}</td>
                                                 <td style={{ padding: '16px 12px' }}>
                                                     <button style={{ background: 'transparent', border: '1px solid var(--glass-border)', padding: '6px 12px', borderRadius: '4px', color: 'var(--foreground)', cursor: 'pointer' }}>Edit Rates</button>
@@ -524,15 +535,16 @@ export default function AdminDashboard() {
                                         <label style={labelStyle}>Levy Name</label>
                                         <input type="text" value={newLevy.name} onChange={e => setNewLevy({ ...newLevy, name: e.target.value })} placeholder="e.g., Waste Management" style={inputStyle} required />
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                        <div>
-                                            <label style={labelStyle}>Landlord Rate (₦)</label>
-                                            <input type="number" value={newLevy.landlordRate} onChange={e => setNewLevy({ ...newLevy, landlordRate: e.target.value })} placeholder="5000" style={inputStyle} required />
-                                        </div>
-                                        <div>
-                                            <label style={labelStyle}>Tenant Rate (₦)</label>
-                                            <input type="number" value={newLevy.tenantRate} onChange={e => setNewLevy({ ...newLevy, tenantRate: e.target.value })} placeholder="3000" style={inputStyle} required />
-                                        </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                                        {Object.keys(newLevy.rates).map(type => (
+                                            <div key={type}>
+                                                <label style={{ ...labelStyle, fontSize: '0.75rem', fontWeight: 500 }}>{type} (₦)</label>
+                                                <input type="number"
+                                                    value={(newLevy.rates as any)[type]}
+                                                    onChange={e => setNewLevy({ ...newLevy, rates: { ...newLevy.rates, [type]: e.target.value } })}
+                                                    placeholder="0" style={{ ...inputStyle, padding: '8px 10px', fontSize: '0.875rem' }} />
+                                            </div>
+                                        ))}
                                     </div>
                                     <button type="submit" className="btn-primary" style={{ marginTop: '8px' }}>Save Levy Configuration</button>
                                 </form>
@@ -596,15 +608,16 @@ export default function AdminDashboard() {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                                     <div>
-                                        <label style={labelStyle}>Role *</label>
-                                        <select style={inputStyle} value={residentForm.role} onChange={e => {
-                                            const role = e.target.value;
+                                        <label style={labelStyle}>Structure Type *</label>
+                                        <select style={inputStyle} value={residentForm.structure_type} onChange={e => {
+                                            const structureType = e.target.value;
                                             const levy = levies.find(l => l.id === residentForm.levy_type_id);
-                                            const amount = levy ? (role === 'landlord' ? levy.landlordRate : levy.tenantRate) : '';
-                                            setResidentForm(f => ({ ...f, role, monthly_amount: String(amount) }));
+                                            const amount = levy ? levy.rates[structureType] : '';
+                                            setResidentForm(f => ({ ...f, structure_type: structureType, monthly_amount: String(amount) }));
                                         }}>
-                                            <option value="tenant" style={{ color: 'black' }}>Tenant</option>
-                                            <option value="landlord" style={{ color: 'black' }}>Landlord / Owner</option>
+                                            {['Duplex', 'Mini Flat', '2 & 3 Bedroom', 'Shop', 'Church', 'Warehouse', 'Hotel Bar', 'School', 'Bungalow'].map(type => (
+                                                <option key={type} value={type} style={{ color: 'black' }}>{type}</option>
+                                            ))}
                                         </select>
                                     </div>
                                     <div>
@@ -686,14 +699,14 @@ export default function AdminDashboard() {
                                         onChange={e => {
                                             const levyId = e.target.value;
                                             const levy = levies.find(l => l.id === levyId);
-                                            const role = payNowResident?.role?.toLowerCase();
-                                            const rate = levy ? (role === 'landlord' ? levy.landlordRate : levy.tenantRate) : '';
+                                            const structureType = payNowResident?.structureType;
+                                            const rate = levy ? levy.rates[structureType] : '';
                                             setPayForm(f => ({ ...f, levy_type_id: levyId, amountReceived: String(rate) }));
                                         }} required>
                                         <option value="" style={{ color: 'black' }}>Select Levy Type</option>
                                         {levies.map(l => (
                                             <option key={l.id} value={l.id} style={{ color: 'black' }}>
-                                                {l.name} — Landlord: ₦{Number(l.landlordRate).toLocaleString()} / Tenant: ₦{Number(l.tenantRate).toLocaleString()}
+                                                {l.name}
                                             </option>
                                         ))}
                                     </select>
@@ -798,8 +811,8 @@ export default function AdminDashboard() {
                                     </div>
                                     <div>
                                         <h3 style={{ fontSize: '1.25rem', fontWeight: 700, lineHeight: 1.2 }}>{selectedResident.name}</h3>
-                                        <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, background: selectedResident.role === 'Landlord' ? 'rgba(59,130,246,0.12)' : 'rgba(16,185,129,0.12)', color: selectedResident.role === 'Landlord' ? 'var(--primary)' : 'var(--success)' }}>
-                                            {selectedResident.role}
+                                        <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600, background: 'rgba(59,130,246,0.12)', color: 'var(--primary)' }}>
+                                            {selectedResident.structureType}
                                         </span>
                                     </div>
                                 </div>

@@ -10,7 +10,7 @@ export default function Register() {
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
-    const [role, setRole] = useState('tenant');
+    const [structureType, setStructureType] = useState('Mini Flat');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const router = useRouter();
@@ -28,7 +28,7 @@ export default function Register() {
                 data: {
                     full_name: fullName,
                     phone: phone,
-                    role: role,
+                    structure_type: structureType,
                 }
             }
         });
@@ -110,10 +110,10 @@ export default function Register() {
                     </div>
 
                     <div>
-                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: 500 }}>Primary Role</label>
+                        <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: 500 }}>Structure Type</label>
                         <select
-                            value={role}
-                            onChange={(e) => setRole(e.target.value)}
+                            value={structureType}
+                            onChange={(e) => setStructureType(e.target.value)}
                             style={{
                                 width: '100%',
                                 padding: '12px',
@@ -124,8 +124,9 @@ export default function Register() {
                                 appearance: 'none'
                             }}
                         >
-                            <option value="tenant" style={{ color: 'black' }}>Tenant</option>
-                            <option value="landlord" style={{ color: 'black' }}>Landlord</option>
+                            {['Duplex', 'Mini Flat', '2 & 3 Bedroom', 'Shop', 'Church', 'Warehouse', 'Hotel Bar', 'School', 'Bungalow'].map(type => (
+                                <option key={type} value={type} style={{ color: 'black' }}>{type}</option>
+                            ))}
                         </select>
                     </div>
 

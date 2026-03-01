@@ -10,7 +10,7 @@ const supabaseAdmin = createClient(
 
 export async function addResidentAction(formData: FormData) {
     const fullName = formData.get('full_name') as string;
-    const role = formData.get('role') as string;
+    const structureType = formData.get('structure_type') as string;
     const phone = formData.get('phone') as string;
     const email = formData.get('email') as string;
     const streetId = formData.get('street_id') as string;
@@ -18,8 +18,8 @@ export async function addResidentAction(formData: FormData) {
     const levyTypeId = formData.get('levy_type_id') as string;
     const monthlyAmount = formData.get('monthly_amount') as string;
 
-    if (!fullName || !role) {
-        return { error: 'Full name and role are required' };
+    if (!fullName || !structureType) {
+        return { error: 'Full name and structure type are required' };
     }
 
     const { data, error } = await supabaseAdmin
@@ -28,7 +28,7 @@ export async function addResidentAction(formData: FormData) {
             full_name: fullName,
             email: email || null,
             phone: phone || null,
-            role: role.toLowerCase(),
+            structure_type: structureType,
             street_id: streetId || null,
             apartment_unit: apartmentUnit || null,
             levy_type_id: levyTypeId || null,
@@ -50,7 +50,7 @@ export async function addResidentAction(formData: FormData) {
             name: data.full_name,
             email: data.email,
             phone: data.phone,
-            role: data.role.charAt(0).toUpperCase() + data.role.slice(1),
+            structureType: data.structure_type,
             streetId: data.street_id,
             apartmentUnit: data.apartment_unit || 'N/A',
             levyTypeId: data.levy_type_id,
@@ -70,7 +70,7 @@ export async function removeResidentAction(userId: string) {
 
 export async function updateResidentAction(userId: string, formData: FormData) {
     const fullName = formData.get('full_name') as string;
-    const role = formData.get('role') as string;
+    const structureType = formData.get('structure_type') as string;
     const phone = formData.get('phone') as string;
     const email = formData.get('email') as string;
     const streetId = formData.get('street_id') as string;
@@ -78,7 +78,7 @@ export async function updateResidentAction(userId: string, formData: FormData) {
     const levyTypeId = formData.get('levy_type_id') as string;
     const monthlyAmount = formData.get('monthly_amount') as string;
 
-    if (!userId || !fullName || !role) return { error: 'Missing required fields' };
+    if (!userId || !fullName || !structureType) return { error: 'Missing required fields' };
 
     const { error } = await supabaseAdmin
         .from('residents')
@@ -86,7 +86,7 @@ export async function updateResidentAction(userId: string, formData: FormData) {
             full_name: fullName,
             email: email || null,
             phone: phone || null,
-            role: role.toLowerCase(),
+            structure_type: structureType,
             street_id: streetId || null,
             apartment_unit: apartmentUnit || null,
             levy_type_id: levyTypeId || null,
@@ -100,7 +100,7 @@ export async function updateResidentAction(userId: string, formData: FormData) {
         success: true,
         user: {
             name: fullName,
-            role: role.charAt(0).toUpperCase() + role.slice(1),
+            structureType: structureType,
             apartmentUnit: apartmentUnit || 'N/A',
             monthlyAmount: Number(monthlyAmount) || 0,
         },
